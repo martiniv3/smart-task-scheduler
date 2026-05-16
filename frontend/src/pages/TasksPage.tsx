@@ -27,8 +27,10 @@ import {
   checkUpcomingTasks,
   requestNotificationPermission,
 } from "../services/notificationService";
+import { getCurrentUserEmail } from "../api/authStorage";
 
 export function TasksPage() {
+  const currentUserEmail = getCurrentUserEmail();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [error, setError] = useState("");
   const [groups, setGroups] = useState<Group[]>([]);
@@ -300,6 +302,9 @@ export function TasksPage() {
       <Box sx={{ py: 4 }}>
         <Typography variant="h4" gutterBottom>
           Smart Task Scheduler
+        </Typography>
+        <Typography variant="subtitle1" sx={{ mb: 2 }}>
+          Logged in as: {currentUserEmail}
         </Typography>
 
         {error && (

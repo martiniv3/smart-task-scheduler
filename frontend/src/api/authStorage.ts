@@ -15,3 +15,25 @@ export function removeToken() {
 export function isAuthenticated() {
   return Boolean(getToken());
 }
+
+function decodeJwtPayload(token: string) {
+  const payload = token.split(".")[1];
+
+  return JSON.parse(atob(payload));
+}
+
+export function getCurrentUserEmail() {
+  const token = getToken();
+
+  if (!token) {
+    return null;
+  }
+
+  try {
+    const payload = decodeJwtPayload(token);
+
+    return payload.email || null;
+  } catch {
+    return null;
+  }
+}
