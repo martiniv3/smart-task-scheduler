@@ -341,7 +341,7 @@ export function TasksPage() {
     filteredTasks.forEach((task, index) => {
       doc.setDrawColor(180);
 
-      doc.rect(15, y - 5, 180, 55);
+      doc.rect(15, y - 5, 180, 60);
 
       doc.setFontSize(14);
       doc.text(`Task #${index + 1}`, 20, y + 2);
@@ -363,6 +363,10 @@ export function TasksPage() {
       y += 7;
 
       doc.text(`Status: ${task.status}`, 20, y);
+
+      y += 7;
+
+      doc.text(`Type: ${task.groupId ? "Group Task" : "Personal Task"}`, 20, y);
 
       y += 7;
 
@@ -894,7 +898,14 @@ export function TasksPage() {
 
                     <Typography>Priority: {task.priority}</Typography>
 
-                    <Box sx={{ mt: 1 }}>
+                    <Stack
+                      direction={{
+                        xs: "column",
+                        sm: "row",
+                      }}
+                      spacing={1}
+                      sx={{ mt: 1 }}
+                    >
                       {task.status === "scheduled" && (
                         <Chip
                           label="Scheduled"
@@ -921,7 +932,21 @@ export function TasksPage() {
                           }}
                         />
                       )}
-                    </Box>
+
+                      {task.groupId ? (
+                        <Chip
+                          label="Group Task"
+                          color="info"
+                          variant="outlined"
+                        />
+                      ) : (
+                        <Chip
+                          label="Personal Task"
+                          color="default"
+                          variant="outlined"
+                        />
+                      )}
+                    </Stack>
 
                     <Stack
                       direction={{
