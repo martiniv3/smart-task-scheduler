@@ -4,6 +4,7 @@ import {
   Button,
   Card,
   CardContent,
+  Chip,
   Container,
   Stack,
   TextField,
@@ -28,6 +29,7 @@ import {
   requestNotificationPermission,
 } from "../services/notificationService";
 import { getCurrentUserEmail } from "../api/authStorage";
+import jsPDF from "jspdf";
 
 export function TasksPage() {
   const currentUserEmail = getCurrentUserEmail();
@@ -59,6 +61,8 @@ export function TasksPage() {
   const [editPriority, setEditPriority] = useState(3);
   const [editStartTime, setEditStartTime] = useState("");
   const [editEndTime, setEditEndTime] = useState("");
+  const [searchTerm, setSearchTerm] = useState("");
+  const [filter, setFilter] = useState("all");
 
   async function loadTasks() {
     try {
@@ -232,7 +236,31 @@ export function TasksPage() {
     setEditStartTime("");
     setEditEndTime("");
   }
+  async function handleChangeTaskStatus(
+    task: Task,
+    status: "scheduled" | "completed" | "cancelled",
+  ) {
+    try {
+      setError("");
 
+      await updateTask(task.id, {
+        title: task.title,
+        description: task.description || "",
+        priority: task.priority,
+        startTime: task.startTime,
+        endTime: task.endTime,
+        status,
+        ...(task.groupId ? { groupId: task.groupId } : {}),
+      });
+
+      await loadTasks();
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : "Failed to update task status";
+
+      setError(message);
+    }
+  }
   async function handleUpdateTask() {
     if (!editingTaskId) {
       return;
@@ -297,6 +325,112 @@ export function TasksPage() {
     }
   }
 
+  function handleExportPdf() {
+    const doc = new jsPDF();
+
+    doc.setFontSize(22);
+    doc.text("Smart Task Scheduler", 20, 20);
+
+    doc.setFontSize(16);
+    doc.text("Tasks Report", 20, 30);
+
+    doc.setFontSize(11);
+
+    let y = 45;
+
+    filteredTasks.forEach((task, index) => {
+      doc.setDrawColor(180);
+
+      doc.rect(15, y - 5, 180, 55);
+
+      doc.setFontSize(14);
+      doc.text(`Task #${index + 1}`, 20, y + 2);
+
+      doc.setFontSize(11);
+
+      y += 10;
+
+      doc.text(`Title: ${task.title}`, 20, y);
+
+      y += 7;
+
+      doc.text(`Description: ${task.description || "No description"}`, 20, y);
+
+      y += 7;
+
+      doc.text(`Priority: ${task.priority}`, 20, y);
+
+      y += 7;
+
+      doc.text(`Status: ${task.status}`, 20, y);
+
+      y += 7;
+
+      doc.text(`Start: ${new Date(task.startTime).toLocaleString()}`, 20, y);
+
+      y += 7;
+
+      doc.text(`End: ${new Date(task.endTime).toLocaleString()}`, 20, y);
+
+      y += 20;
+
+      if (y > 250) {
+        doc.addPage();
+        y = 20;
+      }
+    });
+
+    if (filteredTasks.length === 0) {
+      doc.text("No tasks found.", 20, y);
+    }
+
+    doc.save("smart-task-scheduler-report.pdf");
+  }
+
+  const totalTasks = tasks.length;
+  const completedTasks = tasks.filter(
+    (task) => task.status === "completed",
+  ).length;
+  const scheduledTasks = tasks.filter(
+    (task) => task.status === "scheduled",
+  ).length;
+  const cancelledTasks = tasks.filter(
+    (task) => task.status === "cancelled",
+  ).length;
+  const groupTasks = tasks.filter((task) => task.groupId).length;
+  const highPriorityTasks = tasks.filter((task) => task.priority >= 4).length;
+  const filteredTasks = tasks.filter((task) => {
+    const matchesSearch = task.title
+      .toLowerCase()
+      .includes(searchTerm.toLowerCase());
+
+    if (!matchesSearch) {
+      return false;
+    }
+
+    switch (filter) {
+      case "personal":
+        return !task.groupId;
+
+      case "group":
+        return Boolean(task.groupId);
+
+      case "completed":
+        return task.status === "completed";
+
+      case "scheduled":
+        return task.status === "scheduled";
+
+      case "cancelled":
+        return task.status === "cancelled";
+
+      case "high":
+        return task.priority >= 4;
+
+      default:
+        return true;
+    }
+  });
   return (
     <Container maxWidth="lg">
       <Box sx={{ py: 4 }}>
@@ -306,6 +440,67 @@ export function TasksPage() {
         <Typography variant="subtitle1" sx={{ mb: 2 }}>
           Logged in as: {currentUserEmail}
         </Typography>
+        <Card sx={{ mb: 4 }}>
+          <CardContent>
+            <Typography variant="h6" gutterBottom>
+              Dashboard Statistics
+            </Typography>
+
+            <Box
+              sx={{
+                display: "flex",
+                flexWrap: "wrap",
+                gap: 2,
+                flexDirection: {
+                  xs: "column",
+                  sm: "row",
+                },
+              }}
+            >
+              <Card variant="outlined" sx={{ minWidth: 150 }}>
+                <CardContent>
+                  <Typography variant="body2">Total Tasks</Typography>
+                  <Typography variant="h4">{totalTasks}</Typography>
+                </CardContent>
+              </Card>
+
+              <Card variant="outlined" sx={{ minWidth: 150 }}>
+                <CardContent>
+                  <Typography variant="body2">Scheduled</Typography>
+                  <Typography variant="h4">{scheduledTasks}</Typography>
+                </CardContent>
+              </Card>
+
+              <Card variant="outlined" sx={{ minWidth: 150 }}>
+                <CardContent>
+                  <Typography variant="body2">Completed</Typography>
+                  <Typography variant="h4">{completedTasks}</Typography>
+                </CardContent>
+              </Card>
+
+              <Card variant="outlined" sx={{ minWidth: 150 }}>
+                <CardContent>
+                  <Typography variant="body2">Cancelled</Typography>
+                  <Typography variant="h4">{cancelledTasks}</Typography>
+                </CardContent>
+              </Card>
+
+              <Card variant="outlined" sx={{ minWidth: 150 }}>
+                <CardContent>
+                  <Typography variant="body2">Group Tasks</Typography>
+                  <Typography variant="h4">{groupTasks}</Typography>
+                </CardContent>
+              </Card>
+
+              <Card variant="outlined" sx={{ minWidth: 150 }}>
+                <CardContent>
+                  <Typography variant="body2">High Priority</Typography>
+                  <Typography variant="h4">{highPriorityTasks}</Typography>
+                </CardContent>
+              </Card>
+            </Box>
+          </CardContent>
+        </Card>
 
         {error && (
           <Typography color="error" sx={{ mb: 2 }}>
@@ -532,12 +727,100 @@ export function TasksPage() {
           </CardContent>
         </Card>
 
-        <Typography variant="h5" gutterBottom>
-          Tasks
-        </Typography>
+        <Box
+          sx={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            mb: 2,
+            gap: 2,
+            flexWrap: "wrap",
+          }}
+        >
+          <Typography variant="h5">Tasks</Typography>
+
+          <Button
+            variant="contained"
+            color="secondary"
+            onClick={handleExportPdf}
+          >
+            Export To PDF
+          </Button>
+        </Box>
+        <Card sx={{ mb: 3 }}>
+          <CardContent>
+            <Stack spacing={2}>
+              <TextField
+                label="Search Tasks"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+
+              <Box
+                sx={{
+                  display: "flex",
+                  flexWrap: "wrap",
+                  gap: 1,
+                }}
+              >
+                <Button
+                  variant={filter === "all" ? "contained" : "outlined"}
+                  onClick={() => setFilter("all")}
+                >
+                  All
+                </Button>
+
+                <Button
+                  variant={filter === "personal" ? "contained" : "outlined"}
+                  onClick={() => setFilter("personal")}
+                >
+                  Personal
+                </Button>
+
+                <Button
+                  variant={filter === "group" ? "contained" : "outlined"}
+                  onClick={() => setFilter("group")}
+                >
+                  Group
+                </Button>
+
+                <Button
+                  variant={filter === "scheduled" ? "contained" : "outlined"}
+                  onClick={() => setFilter("scheduled")}
+                >
+                  Scheduled
+                </Button>
+
+                <Button
+                  variant={filter === "completed" ? "contained" : "outlined"}
+                  color="success"
+                  onClick={() => setFilter("completed")}
+                >
+                  Completed
+                </Button>
+
+                <Button
+                  variant={filter === "cancelled" ? "contained" : "outlined"}
+                  color="warning"
+                  onClick={() => setFilter("cancelled")}
+                >
+                  Cancelled
+                </Button>
+
+                <Button
+                  variant={filter === "high" ? "contained" : "outlined"}
+                  color="error"
+                  onClick={() => setFilter("high")}
+                >
+                  High Priority
+                </Button>
+              </Box>
+            </Stack>
+          </CardContent>
+        </Card>
 
         <Stack spacing={2}>
-          {tasks.map((task) => (
+          {filteredTasks.map((task) => (
             <Card key={task.id}>
               <CardContent>
                 {editingTaskId === task.id ? (
@@ -611,7 +894,75 @@ export function TasksPage() {
 
                     <Typography>Priority: {task.priority}</Typography>
 
-                    <Typography>Status: {task.status}</Typography>
+                    <Box sx={{ mt: 1 }}>
+                      {task.status === "scheduled" && (
+                        <Chip
+                          label="Scheduled"
+                          color="primary"
+                          variant="filled"
+                        />
+                      )}
+
+                      {task.status === "completed" && (
+                        <Chip
+                          label="Completed"
+                          color="success"
+                          variant="filled"
+                        />
+                      )}
+
+                      {task.status === "cancelled" && (
+                        <Chip
+                          label="Cancelled"
+                          variant="filled"
+                          sx={{
+                            backgroundColor: "orange",
+                            color: "white",
+                          }}
+                        />
+                      )}
+                    </Box>
+
+                    <Stack
+                      direction={{
+                        xs: "column",
+                        sm: "row",
+                      }}
+                      spacing={1}
+                      sx={{ mt: 1 }}
+                    >
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        onClick={() =>
+                          handleChangeTaskStatus(task, "scheduled")
+                        }
+                      >
+                        Mark Scheduled
+                      </Button>
+
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        color="success"
+                        onClick={() =>
+                          handleChangeTaskStatus(task, "completed")
+                        }
+                      >
+                        Mark Completed
+                      </Button>
+
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        color="warning"
+                        onClick={() =>
+                          handleChangeTaskStatus(task, "cancelled")
+                        }
+                      >
+                        Cancel Task
+                      </Button>
+                    </Stack>
 
                     <Typography>
                       Start: {new Date(task.startTime).toLocaleString()}
@@ -648,6 +999,9 @@ export function TasksPage() {
               </CardContent>
             </Card>
           ))}
+          {filteredTasks.length === 0 && (
+            <Typography>No tasks found.</Typography>
+          )}
         </Stack>
       </Box>
     </Container>

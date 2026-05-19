@@ -9,4 +9,5 @@ export type Task = {
   endTime: string;
   status: TaskStatus;
   createdAt: string;
+  groupId?: string | null;
 };
