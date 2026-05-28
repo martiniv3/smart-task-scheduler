@@ -70,6 +70,9 @@ The system uses:
 ### Visualization
 
 - Calendar view
+- Search and filtering
+- PDF export
+- Dark mode
 
 ---
 
