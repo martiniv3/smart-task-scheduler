@@ -319,7 +319,20 @@ export const updateTask = async (req: AuthRequest, res: Response) => {
     const existingTask = await prisma.task.findFirst({
       where: {
         id,
-        userId,
+        OR: [
+          {
+            userId,
+          },
+          {
+            group: {
+              members: {
+                some: {
+                  userId,
+                },
+              },
+            },
+          },
+        ],
       },
     });
 
@@ -337,33 +350,55 @@ export const updateTask = async (req: AuthRequest, res: Response) => {
       ? new Date(validation.data.endTime)
       : existingTask.endTime;
 
-    validateDateRange(updatedStartTime, updatedEndTime);
-    validateWorkingHours(updatedStartTime, updatedEndTime);
+    const timeChanged =
+      validation.data.startTime !== undefined ||
+      validation.data.endTime !== undefined;
 
-    const otherTasks = await prisma.task.findMany({
-      where: {
-        userId,
-        id: {
-          not: id,
+    if (timeChanged) {
+      validateDateRange(updatedStartTime, updatedEndTime);
+      validateWorkingHours(updatedStartTime, updatedEndTime);
+
+      const conflictFilter = existingTask.groupId
+        ? {
+            groupId: existingTask.groupId,
+            id: {
+              not: id,
+            },
+            status: {
+              not: "cancelled",
+            },
+          }
+        : {
+            userId,
+            groupId: null,
+            id: {
+              not: id,
+            },
+            status: {
+              not: "cancelled",
+            },
+          };
+
+      const otherTasks = await prisma.task.findMany({
+        where: conflictFilter,
+        orderBy: {
+          startTime: "asc",
         },
-        status: {
-          not: "cancelled",
-        },
-      },
-      orderBy: {
-        startTime: "asc",
-      },
-    });
-
-    const scheduler = new RBTreeScheduler(otherTasks);
-
-    const conflict = scheduler.detectConflict(updatedStartTime, updatedEndTime);
-
-    if (conflict.hasConflict) {
-      return res.status(409).json({
-        error: "Updated task conflicts with an existing task.",
-        conflictingTask: conflict.conflictingTask,
       });
+
+      const scheduler = new RBTreeScheduler(otherTasks);
+
+      const conflict = scheduler.detectConflict(
+        updatedStartTime,
+        updatedEndTime,
+      );
+
+      if (conflict.hasConflict) {
+        return res.status(409).json({
+          error: "Updated task conflicts with an existing task.",
+          conflictingTask: conflict.conflictingTask,
+        });
+      }
     }
 
     const updateData: {
