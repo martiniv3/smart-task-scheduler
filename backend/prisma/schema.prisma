@@ -64,3 +64,6 @@ model Task {
   groupId     String?
   group       Group?   @relation(fields: [groupId], references: [id], onDelete: Cascade)
 }
+
+
+
