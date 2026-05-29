@@ -275,7 +275,6 @@ export function TasksPage() {
         priority: editPriority,
         startTime: toSofiaIso(editStartTime),
         endTime: toSofiaIso(editEndTime),
-        status: "scheduled",
       });
 
       cancelEditing();
