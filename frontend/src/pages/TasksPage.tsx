@@ -124,7 +124,7 @@ export function TasksPage() {
   }, [tasks]);
 
   function toSofiaIso(value: string) {
-    return `${value}:00.000+03:00`;
+    return new Date(value).toISOString();
   }
 
   function toDateTimeLocalValue(value: string) {
