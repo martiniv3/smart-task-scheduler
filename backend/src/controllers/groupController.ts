@@ -38,28 +38,36 @@ export const createGroup = async (req: AuthRequest, res: Response) => {
       });
     }
 
+    const memberData = {
+      userId,
+    };
+
+    const groupData = {
+      name: validation.data.name,
+      ownerId: userId,
+      members: {
+        create: memberData,
+      },
+    };
+
+    const userSelection = {
+      id: true,
+      email: true,
+    };
+
+    const groupRelations = {
+      members: {
+        include: {
+          user: {
+            select: userSelection,
+          },
+        },
+      },
+    };
+
     const group = await prisma.group.create({
-      data: {
-        name: validation.data.name,
-        ownerId: userId,
-        members: {
-          create: {
-            userId,
-          },
-        },
-      },
-      include: {
-        members: {
-          include: {
-            user: {
-              select: {
-                id: true,
-                email: true,
-              },
-            },
-          },
-        },
-      },
+      data: groupData,
+      include: groupRelations,
     });
 
     return res.status(201).json(group);
@@ -77,35 +85,40 @@ export const getMyGroups = async (req: AuthRequest, res: Response) => {
   try {
     const userId = getCurrentUserId(req);
 
+    const groupFilter = {
+      members: {
+        some: {
+          userId,
+        },
+      },
+    };
+
+    const userSelection = {
+      id: true,
+      email: true,
+    };
+
+    const groupRelations = {
+      owner: {
+        select: userSelection,
+      },
+      members: {
+        include: {
+          user: {
+            select: userSelection,
+          },
+        },
+      },
+    };
+
+    const groupOrder = {
+      createdAt: "desc" as const,
+    };
+
     const groups = await prisma.group.findMany({
-      where: {
-        members: {
-          some: {
-            userId,
-          },
-        },
-      },
-      include: {
-        owner: {
-          select: {
-            id: true,
-            email: true,
-          },
-        },
-        members: {
-          include: {
-            user: {
-              select: {
-                id: true,
-                email: true,
-              },
-            },
-          },
-        },
-      },
-      orderBy: {
-        createdAt: "desc",
-      },
+      where: groupFilter,
+      include: groupRelations,
+      orderBy: groupOrder,
     });
 
     return res.json(groups);
@@ -127,50 +140,83 @@ export const addGroupMember = async (req: AuthRequest, res: Response) => {
     const validation = addGroupMemberSchema.safeParse(req.body);
 
     if (!validation.success) {
-      return res.status(400).json({
+      const validationErrorResponse = {
         error: "Invalid member data",
         details: validation.error.flatten().fieldErrors,
-      });
+      };
+
+      return res.status(400).json(validationErrorResponse);
     }
 
+    const ownerFilter = {
+      id: groupId,
+      ownerId: userId,
+    };
+
     const group = await prisma.group.findFirst({
-      where: {
-        id: groupId,
-        ownerId: userId,
-      },
+      where: ownerFilter,
     });
 
     if (!group) {
-      return res.status(403).json({
+      const forbiddenResponse = {
         error: "Only the group owner can add members",
-      });
+      };
+
+      return res.status(403).json(forbiddenResponse);
     }
 
+    const userFilter = {
+      email: validation.data.email,
+    };
+
     const userToAdd = await prisma.user.findUnique({
-      where: {
-        email: validation.data.email,
-      },
+      where: userFilter,
     });
 
     if (!userToAdd) {
-      return res.status(404).json({
+      const notFoundResponse = {
         error: "User with this email was not found",
-      });
+      };
+
+      return res.status(404).json(notFoundResponse);
     }
 
+    const existingMembershipFilter = {
+      groupId,
+      userId: userToAdd.id,
+    };
+
+    const existingMembership = await prisma.groupMember.findFirst({
+      where: existingMembershipFilter,
+    });
+
+    if (existingMembership) {
+      const conflictResponse = {
+        error: "User is already a member of this group",
+      };
+
+      return res.status(409).json(conflictResponse);
+    }
+
+    const membershipData = {
+      groupId,
+      userId: userToAdd.id,
+    };
+
+    const userSelection = {
+      id: true,
+      email: true,
+    };
+
+    const membershipRelations = {
+      user: {
+        select: userSelection,
+      },
+    };
+
     const membership = await prisma.groupMember.create({
-      data: {
-        groupId,
-        userId: userToAdd.id,
-      },
-      include: {
-        user: {
-          select: {
-            id: true,
-            email: true,
-          },
-        },
-      },
+      data: membershipData,
+      include: membershipRelations,
     });
 
     return res.status(201).json(membership);
@@ -178,8 +224,10 @@ export const addGroupMember = async (req: AuthRequest, res: Response) => {
     const message =
       error instanceof Error ? error.message : "Failed to add group member";
 
-    return res.status(400).json({
+    const errorResponse = {
       error: message,
-    });
+    };
+
+    return res.status(400).json(errorResponse);
   }
 };
