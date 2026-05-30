@@ -7,27 +7,30 @@ export async function checkTaskConflict(
   endTime: Date,
   groupId?: string,
 ) {
+  const activeTaskFilter = {
+    status: {
+      not: "cancelled",
+    },
+  };
+
+  const taskOrder = {
+    startTime: "asc" as const,
+  };
+
+  const conflictFilter = groupId
+    ? {
+        ...activeTaskFilter,
+        groupId,
+      }
+    : {
+        ...activeTaskFilter,
+        userId,
+        groupId: null,
+      };
+
   const existingTasks = await prisma.task.findMany({
-    where: {
-      status: {
-        not: "cancelled",
-      },
-      OR: groupId
-        ? [
-            {
-              groupId,
-            },
-          ]
-        : [
-            {
-              userId,
-              groupId: null,
-            },
-          ],
-    },
-    orderBy: {
-      startTime: "asc",
-    },
+    where: conflictFilter,
+    orderBy: taskOrder,
   });
 
   const scheduler = new RBTreeScheduler(existingTasks);
@@ -41,16 +44,20 @@ export async function findAvailableSlot(
   searchStart: Date,
   searchEnd: Date,
 ) {
+  const activeTaskFilter = {
+    userId,
+    status: {
+      not: "cancelled",
+    },
+  };
+
+  const taskOrder = {
+    startTime: "asc" as const,
+  };
+
   const existingTasks = await prisma.task.findMany({
-    where: {
-      userId,
-      status: {
-        not: "cancelled",
-      },
-    },
-    orderBy: {
-      startTime: "asc",
-    },
+    where: activeTaskFilter,
+    orderBy: taskOrder,
   });
 
   const scheduler = new RBTreeScheduler(existingTasks);
@@ -68,23 +75,5 @@ export async function autoScheduleTask(
   searchStart: Date,
   searchEnd: Date,
 ) {
-  const existingTasks = await prisma.task.findMany({
-    where: {
-      userId,
-      status: {
-        not: "cancelled",
-      },
-    },
-    orderBy: {
-      startTime: "asc",
-    },
-  });
-
-  const scheduler = new RBTreeScheduler(existingTasks);
-
-  return scheduler.findFirstAvailableSlot(
-    durationMinutes,
-    searchStart,
-    searchEnd,
-  );
+  return findAvailableSlot(userId, durationMinutes, searchStart, searchEnd);
 }

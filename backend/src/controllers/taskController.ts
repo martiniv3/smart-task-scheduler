@@ -65,17 +65,21 @@ export const createTask = async (req: AuthRequest, res: Response) => {
     validateWorkingHours(parsedStart, parsedEnd);
 
     if (groupId) {
+      const membershipFilter = {
+        groupId,
+        userId,
+      };
+
       const membership = await prisma.groupMember.findFirst({
-        where: {
-          groupId,
-          userId,
-        },
+        where: membershipFilter,
       });
 
       if (!membership) {
-        return res.status(403).json({
+        const forbiddenResponse = {
           error: "You are not a member of this group",
-        });
+        };
+
+        return res.status(403).json(forbiddenResponse);
       }
     }
 
@@ -87,10 +91,12 @@ export const createTask = async (req: AuthRequest, res: Response) => {
     );
 
     if (conflict.hasConflict) {
-      return res.status(409).json({
+      const conflictResponse = {
         error: "Task conflicts with an existing task.",
         conflictingTask: conflict.conflictingTask,
-      });
+      };
+
+      return res.status(409).json(conflictResponse);
     }
 
     const createData: {
@@ -128,9 +134,11 @@ export const createTask = async (req: AuthRequest, res: Response) => {
     const message =
       error instanceof Error ? error.message : "Failed to create task";
 
-    return res.status(400).json({
+    const errorResponse = {
       error: message,
-    });
+    };
+
+    return res.status(400).json(errorResponse);
   }
 };
 
@@ -138,26 +146,31 @@ export const getTasks = async (req: AuthRequest, res: Response) => {
   try {
     const userId = getCurrentUserId(req);
 
-    const tasks = await prisma.task.findMany({
-      where: {
-        OR: [
-          {
+    const personalTaskFilter = {
+      userId,
+    };
+
+    const groupTaskFilter = {
+      group: {
+        members: {
+          some: {
             userId,
           },
-          {
-            group: {
-              members: {
-                some: {
-                  userId,
-                },
-              },
-            },
-          },
-        ],
+        },
       },
-      orderBy: {
-        startTime: "asc",
-      },
+    };
+
+    const taskFilter = {
+      OR: [personalTaskFilter, groupTaskFilter],
+    };
+
+    const taskOrder = {
+      startTime: "asc" as const,
+    };
+
+    const tasks = await prisma.task.findMany({
+      where: taskFilter,
+      orderBy: taskOrder,
     });
 
     return res.json(tasks);
@@ -310,36 +323,43 @@ export const updateTask = async (req: AuthRequest, res: Response) => {
     const validation = updateTaskSchema.safeParse(req.body);
 
     if (!validation.success) {
-      return res.status(400).json({
+      const validationErrorResponse = {
         error: "Invalid update data",
         details: validation.error.flatten().fieldErrors,
-      });
+      };
+
+      return res.status(400).json(validationErrorResponse);
     }
 
-    const existingTask = await prisma.task.findFirst({
-      where: {
-        id,
-        OR: [
-          {
+    const personalTaskFilter = {
+      userId,
+    };
+
+    const groupTaskFilter = {
+      group: {
+        members: {
+          some: {
             userId,
           },
-          {
-            group: {
-              members: {
-                some: {
-                  userId,
-                },
-              },
-            },
-          },
-        ],
+        },
       },
+    };
+
+    const existingTaskFilter = {
+      id,
+      OR: [personalTaskFilter, groupTaskFilter],
+    };
+
+    const existingTask = await prisma.task.findFirst({
+      where: existingTaskFilter,
     });
 
     if (!existingTask) {
-      return res.status(404).json({
+      const notFoundResponse = {
         error: "Task not found",
-      });
+      };
+
+      return res.status(404).json(notFoundResponse);
     }
 
     const updatedStartTime = validation.data.startTime
@@ -358,32 +378,38 @@ export const updateTask = async (req: AuthRequest, res: Response) => {
       validateDateRange(updatedStartTime, updatedEndTime);
       validateWorkingHours(updatedStartTime, updatedEndTime);
 
+      const excludeCurrentTaskFilter = {
+        id: {
+          not: id,
+        },
+      };
+
+      const activeTaskFilter = {
+        status: {
+          not: "cancelled",
+        },
+      };
+
       const conflictFilter = existingTask.groupId
         ? {
             groupId: existingTask.groupId,
-            id: {
-              not: id,
-            },
-            status: {
-              not: "cancelled",
-            },
+            ...excludeCurrentTaskFilter,
+            ...activeTaskFilter,
           }
         : {
             userId,
             groupId: null,
-            id: {
-              not: id,
-            },
-            status: {
-              not: "cancelled",
-            },
+            ...excludeCurrentTaskFilter,
+            ...activeTaskFilter,
           };
+
+      const taskOrder = {
+        startTime: "asc" as const,
+      };
 
       const otherTasks = await prisma.task.findMany({
         where: conflictFilter,
-        orderBy: {
-          startTime: "asc",
-        },
+        orderBy: taskOrder,
       });
 
       const scheduler = new RBTreeScheduler(otherTasks);
@@ -394,10 +420,12 @@ export const updateTask = async (req: AuthRequest, res: Response) => {
       );
 
       if (conflict.hasConflict) {
-        return res.status(409).json({
+        const conflictResponse = {
           error: "Updated task conflicts with an existing task.",
           conflictingTask: conflict.conflictingTask,
-        });
+        };
+
+        return res.status(409).json(conflictResponse);
       }
     }
 
@@ -434,8 +462,12 @@ export const updateTask = async (req: AuthRequest, res: Response) => {
       updateData.endTime = updatedEndTime;
     }
 
+    const taskFilter = {
+      id,
+    };
+
     const task = await prisma.task.update({
-      where: { id },
+      where: taskFilter,
       data: updateData,
     });
 
@@ -444,8 +476,10 @@ export const updateTask = async (req: AuthRequest, res: Response) => {
     const message =
       error instanceof Error ? error.message : "Failed to update task";
 
-    return res.status(400).json({
+    const errorResponse = {
       error: message,
-    });
+    };
+
+    return res.status(400).json(errorResponse);
   }
 };

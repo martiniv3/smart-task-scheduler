@@ -20,49 +20,65 @@ export const register = async (req: Request, res: Response) => {
     const validation = registerSchema.safeParse(req.body);
 
     if (!validation.success) {
-      return res.status(400).json({
+      const validationErrorResponse = {
         error: "Invalid register data",
         details: validation.error.flatten().fieldErrors,
-      });
+      };
+
+      return res.status(400).json(validationErrorResponse);
     }
 
     const { email, password } = validation.data;
 
+    const userFilter = {
+      email,
+    };
+
     const existingUser = await prisma.user.findUnique({
-      where: { email },
+      where: userFilter,
     });
 
     if (existingUser) {
-      return res.status(409).json({
+      const conflictResponse = {
         error: "User with this email already exists",
-      });
+      };
+
+      return res.status(409).json(conflictResponse);
     }
 
     const passwordHash = await bcrypt.hash(password, 10);
 
+    const userData = {
+      email,
+      passwordHash,
+    };
+
+    const userSelection = {
+      id: true,
+      email: true,
+      createdAt: true,
+    };
+
     const user = await prisma.user.create({
-      data: {
-        email,
-        passwordHash,
-      },
-      select: {
-        id: true,
-        email: true,
-        createdAt: true,
-      },
+      data: userData,
+      select: userSelection,
     });
 
-    return res.status(201).json({
+    const successResponse = {
       message: "User registered successfully",
       user,
-    });
+    };
+
+    return res.status(201).json(successResponse);
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Failed to register";
 
-    return res.status(500).json({
+    const errorResponse = {
       error: message,
-    });
+    };
+
+    return res.status(500).json(errorResponse);
   }
 };
 
@@ -71,56 +87,70 @@ export const login = async (req: Request, res: Response) => {
     const validation = loginSchema.safeParse(req.body);
 
     if (!validation.success) {
-      return res.status(400).json({
+      const validationErrorResponse = {
         error: "Invalid login data",
         details: validation.error.flatten().fieldErrors,
-      });
+      };
+
+      return res.status(400).json(validationErrorResponse);
     }
 
     const { email, password } = validation.data;
 
+    const userFilter = {
+      email,
+    };
+
     const user = await prisma.user.findUnique({
-      where: { email },
+      where: userFilter,
     });
 
     if (!user) {
-      return res.status(401).json({
+      const unauthorizedResponse = {
         error: "Invalid email or password",
-      });
+      };
+
+      return res.status(401).json(unauthorizedResponse);
     }
 
     const passwordMatches = await bcrypt.compare(password, user.passwordHash);
 
     if (!passwordMatches) {
-      return res.status(401).json({
+      const unauthorizedResponse = {
         error: "Invalid email or password",
-      });
+      };
+
+      return res.status(401).json(unauthorizedResponse);
     }
 
-    const token = jwt.sign(
-      {
-        userId: user.id,
-        email: user.email,
-      },
-      getJwtSecret(),
-      {
-        expiresIn: "1d",
-      },
-    );
+    const tokenPayload = {
+      userId: user.id,
+      email: user.email,
+    };
 
-    return res.json({
+    const tokenOptions = {
+      expiresIn: "1d" as const,
+    };
+
+    const token = jwt.sign(tokenPayload, getJwtSecret(), tokenOptions);
+
+    const successResponse = {
       message: "Login successful",
       token,
       user: {
         id: user.id,
         email: user.email,
       },
-    });
+    };
+
+    return res.json(successResponse);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to login";
 
-    return res.status(500).json({
+    const errorResponse = {
       error: message,
-    });
+    };
+
+    return res.status(500).json(errorResponse);
   }
 };
