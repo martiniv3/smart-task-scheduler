@@ -164,12 +164,22 @@ export const getTasks = async (req: AuthRequest, res: Response) => {
       OR: [personalTaskFilter, groupTaskFilter],
     };
 
+    const taskRelations = {
+      group: {
+        select: {
+          id: true,
+          name: true,
+        },
+      },
+    };
+
     const taskOrder = {
       startTime: "asc" as const,
     };
 
     const tasks = await prisma.task.findMany({
       where: taskFilter,
+      include: taskRelations,
       orderBy: taskOrder,
     });
 

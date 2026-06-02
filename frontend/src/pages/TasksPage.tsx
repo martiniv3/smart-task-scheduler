@@ -365,7 +365,11 @@ export function TasksPage() {
 
       y += 7;
 
-      doc.text(`Type: ${task.groupId ? "Group Task" : "Personal Task"}`, 20, y);
+      const taskType = task.groupId
+        ? `Group Task${task.group?.name ? ` (${task.group.name})` : ""}`
+        : "Personal Task";
+
+      doc.text(`Type: ${taskType}`, 20, y);
 
       y += 7;
 
@@ -934,7 +938,11 @@ export function TasksPage() {
 
                       {task.groupId ? (
                         <Chip
-                          label="Group Task"
+                          label={
+                            task.group?.name
+                              ? `Group: ${task.group.name}`
+                              : "Group Task"
+                          }
                           color="info"
                           variant="outlined"
                         />

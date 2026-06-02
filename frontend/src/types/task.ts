@@ -1,5 +1,10 @@
 export type TaskStatus = "scheduled" | "completed" | "cancelled";
 
+export type TaskGroup = {
+  id: string;
+  name: string;
+};
+
 export type Task = {
   id: string;
   title: string;
@@ -10,4 +15,5 @@ export type Task = {
   status: TaskStatus;
   createdAt: string;
   groupId?: string | null;
+  group?: TaskGroup | null;
 };
